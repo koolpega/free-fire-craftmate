@@ -1,5 +1,4 @@
 from flask import Flask, request, redirect, url_for, flash, send_from_directory, render_template_string
-from werkzeug.utils import secure_filename
 import os
 import requests
 from datetime import datetime
@@ -7,14 +6,10 @@ import urllib.parse
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 MAX_CONTENT_LENGTH = 8 * 1024 * 1024
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 app.secret_key = os.environ.get('FLASK_SECRET', 'change_this_secret')
 
@@ -375,11 +370,6 @@ def map_info():
         return {"error": str(e)}, 500
 
 
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-
 @app.route('/submit', methods=['POST'])
 def submit():
     form = request.form
@@ -392,14 +382,6 @@ def submit():
         return render_template_string(FORM_HTML, formdata=form)
 
     r2_file = files.get('round2_file')
-    saved_filename = None
-    if r2_file and r2_file.filename != '':
-        filename = secure_filename(r2_file.filename)
-        timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
-        filename = f"{timestamp}_{filename}"
-        save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        r2_file.save(save_path)
-        saved_filename = filename
 
     telegram_username = form.get('telegram').strip()
     uid = form.get('uid').strip()
@@ -414,15 +396,14 @@ def submit():
         f"<b>Round 1 Map Code:</b> {round1}\n"
         f"<b>Round 2 Map Code:</b> {round2 if round2 else '(not provided)'}\n"
         f"<b>Round 3 Map Code:</b> {round3}\n"
-        f"<b>Screenshot attached:</b> {'Yes' if saved_filename else 'No'}\n"
+        f"<b>Screenshot attached:</b> {'Yes' if r2_file and r2_file.filename else 'No'}\n"
         f"<b>Timestamp (UTC):</b> {datetime.utcnow().isoformat()}"
     )
 
     send_ok = send_telegram_message(BOT_TOKEN, CHAT_ID, text)
 
-    if saved_filename:
-        photo_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_filename)
-        send_telegram_photo(BOT_TOKEN, CHAT_ID, photo_path, caption=f"Screenshot from {telegram_username}")
+    if r2_file and r2_file.filename:
+        send_telegram_photo(BOT_TOKEN, CHAT_ID, r2_file, caption=f"Screenshot from {telegram_username}")
 
     if not send_ok:
         flash('Failed to send message to Telegram. Please contact the admin.')
@@ -487,17 +468,16 @@ def send_telegram_message(token, chat_id, text):
         app.logger.exception('Error sending Telegram message: %s', e)
         return False
 
-def send_telegram_photo(token, chat_id, photo_path, caption=None):
+def send_telegram_photo(token, chat_id, file_obj, caption=None):
     url = TELEGRAM_API.format(token=token, method='sendPhoto')
     try:
-        with open(photo_path, 'rb') as f:
-            files = {'photo': f}
-            data = {'chat_id': chat_id}
-            if caption:
-                data['caption'] = caption
-                data['parse_mode'] = 'HTML'
-            r = requests.post(url, data=data, files=files, timeout=20)
-            return r.status_code == 200 and r.json().get('ok')
+        files = {'photo': (file_obj.filename, file_obj.stream, file_obj.mimetype)}
+        data = {'chat_id': chat_id}
+        if caption:
+            data['caption'] = caption
+            data['parse_mode'] = 'HTML'
+        r = requests.post(url, data=data, files=files, timeout=20)
+        return r.status_code == 200 and r.json().get('ok')
     except Exception as e:
         app.logger.exception('Error sending photo to Telegram: %s', e)
         return False
