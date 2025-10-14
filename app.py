@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, url_for, flash, send_from_directory, render_template_string
+from flask import Flask, request, redirect, url_for, flash, send_file, render_template_string
 import os
 import requests
 from datetime import datetime
@@ -187,11 +187,11 @@ FORM_HTML = '''
               <h5>Terms & Conditions</h5>
               <div class="form-check mb-2">
                 <input class="form-check-input" type="checkbox" id="tc1" name="tc1">
-                <label class="form-check-label" for="tc1">I have read and understood the rules of this contest.</label>
+                <label class="form-check-label" for="tc1">I have read and understood the <a href=/rules target="_blank">rules</a> of this contest.</label>
               </div>
               <div class="form-check mb-2">
                 <input class="form-check-input" type="checkbox" id="tc2" name="tc2">
-                <label class="form-check-label" for="tc2">I solemnly affirm that my entry follows the UGC Policies of Garena.</label>
+                <label class="form-check-label" for="tc2">I solemnly affirm that my entry follows the <a href="https://content.garena.com/legal/toc/toc_en.html" target="_blank">UGC Policies</a> of Garena.</label>
               </div>
               <div class="form-check mb-2">
                 <input class="form-check-input" type="checkbox" id="tc3" name="tc3">
@@ -327,6 +327,10 @@ document.addEventListener("DOMContentLoaded", () => {
 @app.route('/')
 def index():
     return render_template_string(FORM_HTML)
+
+@app.route('/rules')
+def rules():
+    return send_file("rules.pdf", mimetype='application/pdf')
 
 @app.route('/account_info')
 def account_info():
