@@ -335,43 +335,69 @@ def rules():
 @app.route('/account_info')
 def account_info():
     uid = request.args.get('uid', '').strip()
-    region = request.args.get('region', 'ind')
     if not uid:
         return {"error": "Missing UID"}, 400
 
-    url = f"https://ff.deaddos.online/api/data?region={region}&uid={uid}&key=Craftmate"
+    regions = ['ind', 'sg', 'br']
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/140.0.0.0 Safari/537.36"
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/140.0.0.0 Safari/537.36"
+        )
     }
-    try:
-        r = requests.get(url, headers=headers, timeout=10)
+
+    for region in regions:
+        url = f"https://ff.deaddos.online/api/data?region={region}&uid={uid}&key=Craftmate"
+        app.logger.info(f"Fetching account info from region: {region} ({url})")
+
         try:
-            data = r.json()
-        except Exception:
-            return {"error": "Failed to parse JSON", "status_code": r.status_code, "text": r.text}, 500
-        return data, r.status_code
-    except Exception as e:
-        return {"error": str(e)}, 500
+            r = requests.get(url, headers=headers, timeout=10)
+            app.logger.info(f"Region {region} -> Status: {r.status_code}, Body: {r.text[:200]}")
+
+            if r.status_code == 200:
+                try:
+                    data = r.json()
+                    return data, 200
+                except Exception:
+                    return {
+                        "error": "Failed to parse JSON",
+                        "region": region,
+                        "status_code": r.status_code,
+                        "text": r.text
+                    }, 500
+
+        except Exception as e:
+            app.logger.error(f"Error fetching from region {region}: {e}")
+
+    return {"error": "Invalid UID"}, 500
 
 
 @app.route('/map_info')
 def map_info():
     code = request.args.get('code', '').strip()
-    region = request.args.get('region', 'ind')
     if not code.startswith('#FREEFIRE'):
         return {"error": "Invalid map code"}, 400
 
+    regions = ['ind', 'sg', 'br']
     encoded_code = urllib.parse.quote(code, safe='')
-    url = f"https://map-info.craftland.ff.deaddos.online/api/{region}?code={encoded_code}&key=Craftmate"
-    app.logger.info(f"Fetching map info: {url}")
-    try:
-        r = requests.get(url, timeout=10)
-        app.logger.info(f"Craftland API status: {r.status_code}, body: {r.text[:200]}")
-        return r.json(), r.status_code
-    except Exception as e:
-        return {"error": str(e)}, 500
+
+    for region in regions:
+        url = f"https://map-info.craftland.ff.deaddos.online/api/{region}?code={encoded_code}&key=Craftmate"
+        app.logger.info(f"Fetching map info from region: {region} ({url})")
+
+        try:
+            r = requests.get(url, timeout=10)
+            app.logger.info(f"Region {region} -> Status: {r.status_code}, Body: {r.text[:200]}")
+
+            if r.status_code == 200:
+                return r.json(), 200
+
+        except Exception as e:
+            app.logger.error(f"Error while fetching from {region}: {e}")
+
+    return {"error": "Invalid map code"}, 500
+
 
 
 @app.route('/submit', methods=['POST'])
